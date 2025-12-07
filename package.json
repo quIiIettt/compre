@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "decode:kmr": "node scripts/decode-kmr.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",

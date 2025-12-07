@@ -128,6 +128,13 @@ Upload -> RGBA -> YCrCb -> block averages (nodes) -> optional quantization
 - Implementation uses `sharp` for decoding/encoding and the same custom codec modules as the client.
 - If backend is unavailable, the client automatically falls back to the client-only path.
 
+## CLI decoder for `.kmr`
+- Script: `scripts/decode-kmr.js` (Node).
+- Usage: `node scripts/decode-kmr.js <file.kmr> [output.png]`
+  - Reads the `.kmr`, decodes QOI + Huffman streams, reverses Paeth residuals, and writes a PNG preview.
+  - Prints header info and sizes to stdout.
+- Shortcut: `npm run decode:kmr -- path/to/file.kmr decoded.png`
+
 ### Nodal grid vs blocks (top view)
 ```
 Pixels (width x height)
