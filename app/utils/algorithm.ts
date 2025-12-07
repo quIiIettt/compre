@@ -45,6 +45,14 @@ export const processImageFrame = (
     if (discard === 0) return rounded;
     return ((rounded >> discard) << discard) & 0xff;
   };
+  const quantizePixel = (val: number) => {
+    const rounded = Math.round(val);
+    const clamped = Math.min(255, Math.max(0, rounded));
+    // When smoothing is on with discardBits>0, interpolation reintroduces lower bits;
+    // quantizing keeps entropy low and matches the intended bit depth.
+    if (discard === 0) return clamped;
+    return ((clamped >> discard) << discard) & 0xff;
+  };
 
   // Step 1-3: compute nodal points
   for (let gy = 0; gy < gridHeight; gy++) {
@@ -163,9 +171,9 @@ export const processImageFrame = (
         const b = yVal + 1.772 * cbVal;
 
         const offset = (y * width + x) * 4;
-        outputData[offset] = Math.min(255, Math.max(0, r));
-        outputData[offset + 1] = Math.min(255, Math.max(0, g));
-        outputData[offset + 2] = Math.min(255, Math.max(0, b));
+        outputData[offset] = quantizePixel(r);
+        outputData[offset + 1] = quantizePixel(g);
+        outputData[offset + 2] = quantizePixel(b);
         outputData[offset + 3] = 255;
       }
     }

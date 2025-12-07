@@ -13,11 +13,9 @@ const deltaEncode = (data: number[]): number[] => {
   let prev = 0;
   for (let i = 0; i < data.length; i++) {
     const v = data[i];
-    let diff = v - prev;
-    // clamping is important to keep within byte range logic if needed, 
-    // but usually delta is just modulo 256. Assuming logic matches original:
-    diff = Math.max(-128, Math.min(127, diff)); 
-    out.push((diff + 128) & 0xff);
+    // Wrap diff into uint8 so that decoding can reinterpret as int8 losslessly.
+    const diff = (v - prev + 256) & 0xff;
+    out.push(diff);
     prev = v;
   }
   return out;
@@ -289,7 +287,7 @@ export const decodeHuffman = (data: Uint8Array, expectedLength: number): Uint8Ar
   // No, separate stages are easier to debug and optimize.
   // Let's decode symbols first.
   
-  const rleStream = new Uint8Array(expectedLength * 2); // Heuristic
+  let rleStream = new Uint8Array(Math.max(16, expectedLength * 2)); // Heuristic, grows if needed
   let rlePos = 0;
 
   // Bit Buffer
@@ -362,12 +360,9 @@ export const decodeHuffman = (data: Uint8Array, expectedLength: number): Uint8Ar
             const sym = symbols[symbolIndex];
             
             if (rlePos >= rleStream.length) {
-                // Grow buffer
                 const newBuf = new Uint8Array(rleStream.length * 2);
                 newBuf.set(rleStream);
-                // rleStream = newBuf; // can't reassign const, need 'let' or copy
-                // Actually easier to just keep 'out' as let or use a chunked array.
-                // Let's assume heuristic was ok, or throw error for now/resize.
+                rleStream = newBuf;
             }
             rleStream[rlePos++] = sym;
             
@@ -401,36 +396,16 @@ export const decodeHuffman = (data: Uint8Array, expectedLength: number): Uint8Ar
           // Apply run
           for (let r = 0; r < run; r++) {
               if (outIdx >= expectedLength) break;
-              // Delta decode logic: v is the delta
-              // Wait, in encoder: rleEncode(deltas). So v IS the delta byte (0-255 mapped).
-              
-              // Map back: (byte - 128)
-              // (v - 128) is the diff.
-              // We need to cast to int8 handling.
-              
-              // Optimization: v is uint8 (0..255).
-              // diff = (v - 128).
-              // result = prev + diff.
-              // To match encoder: 
-              // diff = (val - 128) << 24 >> 24; // Sign extension trick if needed
-              // But here simple subtraction works if wrapped correctly.
-              
-              let diff = v - 128; 
-              // Reconstruct
-              let pixel = prevVal + diff;
-              // Clamp
-              if (pixel < 0) pixel = 0;
-              if (pixel > 255) pixel = 255;
+              const diff = (v << 24) >> 24; // reinterpret as int8
+              const pixel = (prevVal + diff + 256) & 0xff; // wrap back into byte range
               
               finalOut[outIdx++] = pixel;
               prevVal = pixel;
           }
       } else {
           // Single value delta
-          let diff = val - 128;
-          let pixel = prevVal + diff;
-          if (pixel < 0) pixel = 0;
-          if (pixel > 255) pixel = 255;
+          const diff = (val << 24) >> 24;
+          const pixel = (prevVal + diff + 256) & 0xff;
           
           finalOut[outIdx++] = pixel;
           prevVal = pixel;
