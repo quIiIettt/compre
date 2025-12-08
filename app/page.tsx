@@ -38,6 +38,35 @@ type YCrCbPreview = {
   composite: string;
 };
 
+type YCrCbHistogram = {
+  y: number[];
+  cb: number[];
+  cr: number[];
+};
+
+type CsvRecordInput = {
+  context: 'backend' | 'simulation';
+  source: 'image' | 'container' | null;
+  dimensions: { width: number; height: number } | null;
+  config: { blockSize: number; discardBits: number; smooth: boolean };
+  stats: {
+    rawSize: number;
+    compressedSize: number;
+    nodalSize: number;
+    qoiSize: number;
+    jpegSize: number;
+    pngSize: number;
+    webpSize: number;
+  };
+  metrics: { psnr: number | null; ssim: number | null };
+  codec: {
+    custom?: { encodeMs: number | null; decodeMs: number | null };
+    png?: { encodeMs: number | null; decodeMs: number | null };
+    jpeg?: { encodeMs: number | null; decodeMs: number | null };
+    webp?: { encodeMs: number | null; decodeMs: number | null };
+  };
+};
+
 const ComparisonChart = ({
   raw,
   jpeg,
@@ -277,6 +306,9 @@ const buildYCrCbPlanes = (imageData: ImageData) => {
   const cbPlane = new Uint8ClampedArray(data.length);
   const crPlane = new Uint8ClampedArray(data.length);
   const recombined = new Uint8ClampedArray(data.length);
+  const histY = new Array<number>(256).fill(0);
+  const histCb = new Array<number>(256).fill(0);
+  const histCr = new Array<number>(256).fill(0);
 
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
@@ -315,6 +347,10 @@ const buildYCrCbPlanes = (imageData: ImageData) => {
     recombined[i + 1] = reconG;
     recombined[i + 2] = reconB;
     recombined[i + 3] = 255;
+
+    histY[yVal]++;
+    histCb[cbVal]++;
+    histCr[crVal]++;
   }
 
   return {
@@ -322,6 +358,7 @@ const buildYCrCbPlanes = (imageData: ImageData) => {
     cb: new ImageData(cbPlane, width, height),
     cr: new ImageData(crPlane, width, height),
     recombined: new ImageData(recombined, width, height),
+    histogram: { y: histY, cb: histCb, cr: histCr } as YCrCbHistogram,
   };
 };
 
@@ -338,6 +375,10 @@ export default function Home() {
   const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null);
   const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
   const [ycrcbPreview, setYcrcbPreview] = useState<YCrCbPreview | null>(null);
+  const [ycrcbHistogram, setYcrcbHistogram] = useState<YCrCbHistogram | null>(null);
+  const csvHeader =
+    'timestamp,context,source,width,height,blockSize,discardBits,smooth,psnr,ssim,rawSize,compressedSize,nodalSize,qoiSize,jpegSize,pngSize,webpSize,customEncodeMs,customDecodeMs,jpegEncodeMs,jpegDecodeMs,pngEncodeMs,pngDecodeMs,webpEncodeMs,webpDecodeMs';
+  const [csvRows, setCsvRows] = useState<string[]>([csvHeader]);
   const [metrics, setMetrics] = useState<{ psnr: number | null; ssim: number | null }>({ psnr: null, ssim: null });
   const [codecMetrics, setCodecMetrics] = useState<{
     jpeg: { encodeMs: number | null; decodeMs: number | null };
@@ -389,9 +430,56 @@ export default function Home() {
     return out;
   };
 
+  const toCsvCell = (value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'number' && Number.isNaN(value)) return 'NaN';
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return `${value}`;
+  };
+
+  const appendCsvRecord = (data: CsvRecordInput) => {
+    const row = [
+      new Date().toISOString(),
+      data.context,
+      data.source ?? '',
+      data.dimensions?.width ?? '',
+      data.dimensions?.height ?? '',
+      data.config.blockSize,
+      data.config.discardBits,
+      data.config.smooth,
+      data.metrics.psnr,
+      data.metrics.ssim,
+      data.stats.rawSize,
+      data.stats.compressedSize,
+      data.stats.nodalSize,
+      data.stats.qoiSize,
+      data.stats.jpegSize,
+      data.stats.pngSize,
+      data.stats.webpSize,
+      data.codec.custom?.encodeMs ?? '',
+      data.codec.custom?.decodeMs ?? '',
+      data.codec.jpeg?.encodeMs ?? '',
+      data.codec.jpeg?.decodeMs ?? '',
+      data.codec.png?.encodeMs ?? '',
+      data.codec.png?.decodeMs ?? '',
+      data.codec.webp?.encodeMs ?? '',
+      data.codec.webp?.decodeMs ?? '',
+    ]
+      .map(toCsvCell)
+      .join(',');
+    setCsvRows((prev) => [...prev, row]);
+    // Try to persist on server for global log aggregation.
+    fetch('/api/log-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ row, header: csvHeader }),
+    }).catch((err) => console.error('Failed to persist CSV log', err));
+  };
+
   const updateYCrCbPreview = (imageData: ImageData | null) => {
     if (!imageData) {
       setYcrcbPreview(null);
+      setYcrcbHistogram(null);
       return;
     }
 
@@ -403,8 +491,10 @@ export default function Home() {
 
     if (yUrl && cbUrl && crUrl && compositeUrl) {
       setYcrcbPreview({ y: yUrl, cb: cbUrl, cr: crUrl, composite: compositeUrl });
+      setYcrcbHistogram(planes.histogram);
     } else {
       setYcrcbPreview(null);
+      setYcrcbHistogram(null);
     }
   };
 
@@ -421,6 +511,7 @@ export default function Home() {
         setProcessedImageData(null);
         setHeatmapUrl(null);
         setYcrcbPreview(null);
+        setYcrcbHistogram(null);
         setMetrics({ psnr: null, ssim: null });
         setCodecMetrics({
           jpeg: { encodeMs: null, decodeMs: null },
@@ -481,6 +572,23 @@ export default function Home() {
               jpeg: json.timings.jpeg,
               webp: json.timings.webp,
               custom: json.timings.custom,
+            });
+            appendCsvRecord({
+              context: 'backend',
+              source: 'image',
+              dimensions: json.dimensions ?? { width: img.width, height: img.height },
+              config: { blockSize, discardBits, smooth },
+              stats: {
+                rawSize: json.sizes.raw,
+                compressedSize: json.sizes.custom,
+                nodalSize: json.sizes.nodal,
+                qoiSize: json.sizes.qoi,
+                jpegSize: json.sizes.jpeg,
+                pngSize: json.sizes.png,
+                webpSize: json.sizes.webp,
+              },
+              metrics: { psnr: originalData ? computePSNR(originalData, processedData) : json.metrics.psnr ?? null, ssim: originalData ? computeSSIM(originalData, processedData) : json.metrics.ssim ?? null },
+              codec: json.timings,
             });
             setStats((prev) => ({
               ...prev,
@@ -669,6 +777,29 @@ export default function Home() {
         webpSize: webpBytes,
       }));
 
+      appendCsvRecord({
+        context: 'simulation',
+        source: sourceKind,
+        dimensions: { width: originalImage.width, height: originalImage.height },
+        config: { blockSize, discardBits, smooth },
+        stats: {
+          rawSize: originalImage.width * originalImage.height * 3,
+          compressedSize: totalSize,
+          nodalSize: totalHuffmanSize,
+          qoiSize: qoiBytes.length,
+          jpegSize: jpegBytes,
+          pngSize: pngBytes,
+          webpSize: webpBytes,
+        },
+        metrics: { psnr, ssim },
+        codec: {
+          custom: { encodeMs: endTime - startTime, decodeMs: customDecodeMs },
+          jpeg: { encodeMs: jpegEncodeMs, decodeMs: jpegDecodeMs },
+          png: { encodeMs: pngEncodeMs, decodeMs: pngDecodeMs },
+          webp: { encodeMs: webpEncodeMs, decodeMs: webpDecodeMs },
+        },
+      });
+
       setIsProcessing(false);
     }, 50);
   };
@@ -749,6 +880,17 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadCsvLog = () => {
+    if (csvRows.length <= 1) return;
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `codec-log-${Date.now()}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const featureChips = [
     { icon: Sparkles, label: 'Lossless visual output (set discard bits to 0)' },
     { icon: Layers, label: 'Block-wise YCrCb nodes for Huffman' },
@@ -761,6 +903,31 @@ export default function Home() {
     if (v === null) return 'N/A';
     if (Number.isNaN(v)) return 'Error';
     return `${v.toFixed(1)} ms`;
+  };
+  const renderHistogram = (values: number[], color: string, label: string) => {
+    const max = Math.max(...values, 1);
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span className="font-semibold">{label}</span>
+          <span className="text-[11px] text-slate-500">max {max}</span>
+        </div>
+        <div className="flex h-24 items-end gap-[1px] rounded-xl bg-white/70 p-2 shadow-inner">
+          {values.map((v, idx) => (
+            <div
+              // width distributed evenly; inline styles avoid dynamic class churn
+              key={idx}
+              style={{
+                height: `${(v / max) * 100}%`,
+                width: `${100 / values.length}%`,
+                background: color,
+                borderRadius: '2px 2px 0 0',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -801,6 +968,13 @@ export default function Home() {
                   {chip.label}
                 </span>
               ))}
+              <a
+                href="/batch"
+                className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Batch compress (10-20 imgs)
+              </a>
             </div>
           </div>
         </header>
@@ -1017,6 +1191,31 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                {ycrcbHistogram && (
+                  <div className="mt-6 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="font-semibold uppercase tracking-widest">Channel Histograms</span>
+                      <span className="text-[11px] text-slate-400">0-255 value distribution</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      {renderHistogram(
+                        ycrcbHistogram.y,
+                        'linear-gradient(180deg, #0ea5e9, #0284c7)',
+                        'Y (luma)'
+                      )}
+                      {renderHistogram(
+                        ycrcbHistogram.cb,
+                        'linear-gradient(180deg, #22d3ee, #0ea5e9)',
+                        'Cb (blue chroma)'
+                      )}
+                      {renderHistogram(
+                        ycrcbHistogram.cr,
+                        'linear-gradient(180deg, #f472b6, #db2777)',
+                        'Cr (red chroma)'
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1129,6 +1328,14 @@ export default function Home() {
                   Download JSON
                 </button>
                 <button
+                  onClick={handleDownloadCsvLog}
+                  disabled={csvRows.length <= 1}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/60 px-6 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4" />
+                  Download CSV log
+                </button>
+                <button
                   onClick={() => {
                     setOriginalImage(null);
                     setProcessedImageUrl(null);
@@ -1139,6 +1346,7 @@ export default function Home() {
                     setProcessedImageData(null);
                     setHeatmapUrl(null);
                     setYcrcbPreview(null);
+                    setYcrcbHistogram(null);
                     setMetrics({ psnr: null, ssim: null });
                     setCodecMetrics({
                       jpeg: { encodeMs: null, decodeMs: null },

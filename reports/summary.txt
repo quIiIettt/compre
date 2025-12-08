@@ -1,0 +1,9 @@
+Codec log summary
+==================
+
+Total records: 100
+
+Grouped by discardBits, blockSize, smooth:
+                              count  avg_ratio  med_ratio   avg_psnr   med_psnr  avg_ssim  med_ssim  avg_custom_enc  avg_custom_dec
+discardBits blockSize smooth                                                                                                       
+2           8         False     100  48.756029  45.756107  27.061107  26.983417  0.955807  0.979737     3997.724094     1083.580676

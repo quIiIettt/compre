@@ -86,6 +86,47 @@ const computePSNR = (a: ImageData, b: ImageData): number => {
   return 10 * Math.log10((255 * 255) / mse);
 };
 
+const computeSSIM = (a: ImageData, b: ImageData): number => {
+  if (a.width !== b.width || a.height !== b.height) return NaN;
+  const len = a.data.length;
+  let meanA = 0;
+  let meanB = 0;
+  const lumA = new Float32Array(len / 4);
+  const lumB = new Float32Array(len / 4);
+  for (let i = 0, p = 0; i < len; i += 4, p++) {
+    const yA = 0.299 * a.data[i] + 0.587 * a.data[i + 1] + 0.114 * a.data[i + 2];
+    const yB = 0.299 * b.data[i] + 0.587 * b.data[i + 1] + 0.114 * b.data[i + 2];
+    lumA[p] = yA;
+    lumB[p] = yB;
+    meanA += yA;
+    meanB += yB;
+  }
+  const count = len / 4;
+  meanA /= count;
+  meanB /= count;
+
+  let varA = 0;
+  let varB = 0;
+  let cov = 0;
+  for (let i = 0; i < count; i++) {
+    const da = lumA[i] - meanA;
+    const db = lumB[i] - meanB;
+    varA += da * da;
+    varB += db * db;
+    cov += da * db;
+  }
+  varA /= Math.max(1, count - 1);
+  varB /= Math.max(1, count - 1);
+  cov /= Math.max(1, count - 1);
+
+  const c1 = (0.01 * 255) ** 2;
+  const c2 = (0.03 * 255) ** 2;
+
+  const ssim =
+    ((2 * meanA * meanB + c1) * (2 * cov + c2)) / ((meanA * meanA + meanB * meanB + c1) * (varA + varB + c2));
+  return ssim;
+};
+
 const encodeDecode = async (
   rawData: Uint8ClampedArray,
   width: number,
@@ -168,6 +209,7 @@ export async function POST(req: Request) {
   }
 
   const psnr = computePSNR(imageData, processed.processedImageData);
+  const ssim = computeSSIM(imageData, processed.processedImageData);
 
   return NextResponse.json({
     dimensions: { width: imageData.width, height: imageData.height },
@@ -184,7 +226,7 @@ export async function POST(req: Request) {
     },
     metrics: {
       psnr,
-      ssim: null,
+      ssim,
     },
     timings: {
       png: { encodeMs: pngStats.encodeMs, decodeMs: pngStats.decodeMs },
