@@ -8,19 +8,86 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-roboto);
+  --font-sans: var(--font-cairo);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #171717;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-roboto), "Roboto", Arial, Helvetica, sans-serif;
+  font-family: var(--font-cairo), "Cairo", Arial, Helvetica, sans-serif;
+}
+
+/* Light theme overrides */
+.light-theme {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.light-theme .border-white\/10 {
+  border-color: #e2e8f0 !important;
+}
+
+.light-theme .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.light-theme .bg-white\/10 {
+  background-color: #e2e8f0 !important;
+}
+
+.light-theme .bg-white\/60 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.light-theme .bg-white\/80 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.light-theme .bg-black\/20 {
+  background-color: #f1f5f9 !important;
+}
+
+.light-theme .bg-slate-900\/80 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.light-theme .text-white,
+.light-theme .text-slate-50,
+.light-theme .text-slate-100 {
+  color: #0f172a !important;
+}
+
+.light-theme .text-slate-200,
+.light-theme .text-slate-200\/80 {
+  color: #1f2937 !important;
+}
+
+.light-theme .text-slate-300,
+.light-theme .text-slate-300\/80 {
+  color: #334155 !important;
+}
+
+.light-theme .text-emerald-100,
+.light-theme .text-emerald-200 {
+  color: #047857 !important;
+}
+
+.light-theme .text-emerald-300 {
+  color: #059669 !important;
+}
+
+.light-theme .bg-emerald-500\/10 {
+  background-color: #ecfdf3 !important;
+}
+
+.light-theme .bg-emerald-500\/15 {
+  background-color: #d1fae5 !important;
 }

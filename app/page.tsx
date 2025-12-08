@@ -766,10 +766,9 @@ export default function Home() {
   return (
     <main className="light-theme relative min-h-screen overflow-hidden bg-white text-slate-900">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-48 -top-48 h-[52rem] w-[52rem] rounded-full bg-gradient-to-br from-sky-500 via-blue-600/80 to-transparent blur-[180px] opacity-100" />
-        <div className="absolute -right-48 -bottom-48 h-[56rem] w-[56rem] rounded-full bg-gradient-to-tl from-purple-800 via-violet-600/80 to-transparent blur-[200px] opacity-100" />
-        <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-blue-100/60 via-transparent to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-purple-100/60 via-transparent to-transparent" />
+        <div className="absolute -left-44 -top-44 h-[52rem] w-[52rem] rounded-full bg-gradient-to-br from-sky-500 via-blue-600/80 to-transparent blur-[180px] opacity-100" />
+        <div className="absolute -right-44 -bottom-44 h-[56rem] w-[56rem] rounded-full bg-gradient-to-tl from-purple-800 via-violet-600/80 to-transparent blur-[200px] opacity-100" />
+        <div className="absolute left-20 top-20 h-[40rem] w-[40rem] -translate-x-20 -translate-y-20 rounded-full bg-gradient-radial from-white via-indigo-50/80 to-transparent blur-[140px] opacity-95" />
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12">

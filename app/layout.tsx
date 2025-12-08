@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Roboto } from "next/font/google";
+import { Geist_Mono, Cairo } from "next/font/google";
 import "./globals.css";
 
-const roboto = Roboto({
-  weight: ["400", "500", "700"],
+const cairo = Cairo({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-roboto",
+  variable: "--font-cairo",
 });
 
 const geistMono = Geist_Mono({
@@ -27,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${roboto.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${cairo.variable} ${geistMono.variable} font-sans antialiased bg-gradient-to-br from-white via-blue-50 to-purple-50 text-slate-800`}>
         {children}
       </body>
     </html>

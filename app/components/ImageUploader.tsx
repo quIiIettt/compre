@@ -19,23 +19,21 @@ export const ImageUploader: React.FC<Props> = ({ onImageSelected, onContainerSel
   };
 
   return (
-    <label className="group relative block h-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900/80 to-slate-950 p-[1px] shadow-2xl backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgba(16,185,129,0.55)]">
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/15 via-transparent to-cyan-400/10 opacity-70" />
-      <div className="relative flex h-full flex-col items-center justify-center gap-5 rounded-[calc(1.5rem-1px)] border border-white/10 bg-slate-900/80 px-6 py-8 text-center text-slate-100">
+    <label className="group relative block h-full cursor-pointer overflow-hidden rounded-3xl border border-slate-200/80 bg-white/60 p-1 shadow-lg backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-xl">
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-300/20 via-transparent to-blue-300/20 opacity-70" />
+      <div className="relative flex h-full flex-col items-center justify-center gap-5 rounded-[calc(1.5rem-1px)] border border-white/70 bg-white/80 px-6 py-8 text-center">
         <div className="flex items-center justify-center">
-          <span className="rounded-2xl border border-white/10 bg-white/5 p-4 text-emerald-200 transition group-hover:scale-105">
+          <span className="rounded-2xl border border-white/70 bg-violet-100 p-4 text-violet-600 transition group-hover:scale-105">
             <UploadCloud className="h-8 w-8" />
           </span>
         </div>
         <div className="space-y-1">
-          <p className="text-lg font-semibold">Drag and drop or choose an image or .kmr</p>
-          <p className="text-sm text-slate-300/80">
-            PNG/JPG for encoding; .kmr for decoding your custom container back into the preview.
-          </p>
+          <p className="text-lg font-semibold text-slate-800">Choose an image or .kmr file</p>
+          <p className="text-sm text-slate-500">Drag & drop or click to upload</p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-emerald-100">
+        <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-100 px-3 py-2 text-xs font-semibold text-violet-700">
           <ImageIcon className="h-4 w-4" />
-          Use at least 512x512 for a clearer comparison
+          Supports PNG, JPG, and KMR files
         </div>
         <input
           type="file"
