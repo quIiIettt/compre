@@ -31,6 +31,13 @@ type ChartBar = {
   icon: LucideIcon;
 };
 
+type YCrCbPreview = {
+  y: string;
+  cb: string;
+  cr: string;
+  composite: string;
+};
+
 const ComparisonChart = ({
   raw,
   jpeg,
@@ -45,45 +52,53 @@ const ComparisonChart = ({
   mine: number;
 }) => {
   const bars: ChartBar[] = [
-    { label: 'Raw RGB (24-bit)', value: raw, color: 'from-slate-200 to-slate-400', icon: Layers },
-    { label: 'PNG (lossless)', value: png, color: 'from-sky-300 to-sky-500', icon: ImageIcon },
-    { label: 'JPEG (Q=90)', value: jpeg, color: 'from-amber-300 to-orange-400', icon: Camera },
-    { label: 'WebP (Q=90)', value: webp, color: 'from-fuchsia-300 to-fuchsia-500', icon: Waves },
-    { label: 'Custom codec', value: mine, color: 'from-emerald-300 to-emerald-500', icon: Sparkles },
+    { label: 'Raw RGB', value: raw, color: 'bg-slate-300', icon: Layers },
+    { label: 'PNG', value: png, color: 'bg-sky-400', icon: ImageIcon },
+    { label: 'JPEG', value: jpeg, color: 'bg-amber-400', icon: Camera },
+    { label: 'WebP', value: webp, color: 'bg-fuchsia-400', icon: Waves },
+    { label: 'Custom', value: mine, color: 'bg-gradient-to-r from-violet-500 to-blue-500', icon: Sparkles },
   ];
 
   const maxVal = Math.max(...bars.map((bar) => bar.value), 1);
-  const formatMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  };
 
   return (
-    <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+    <div className="w-full rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-lg backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300/80">Size comparison</p>
-          <h3 className="text-xl font-bold text-white">How each format compresses</h3>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Size Comparison</p>
+          <h3 className="text-xl font-bold text-slate-800">Which Codec is Best?</h3>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-emerald-200">
+        <div className="flex items-center gap-2 rounded-full bg-violet-100/80 px-3 py-1 text-xs font-semibold text-violet-700">
           <BarChart3 className="h-4 w-4" />
-          Live simulation
+          Lower is Better
         </div>
       </div>
-      <div className="mt-6 space-y-5 text-sm font-medium text-slate-100">
+      <div className="mt-6 space-y-5 text-sm font-medium text-slate-700">
         {bars.map((bar) => {
-          const percent = Math.max(6, (bar.value / maxVal) * 100);
+          const percent = Math.max(1, (bar.value / maxVal) * 100);
+          const isCustom = bar.label === 'Custom';
           return (
             <div key={bar.label} className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-slate-200">
-                  <bar.icon className="h-4 w-4 text-slate-300" />
+                <span
+                  className={`flex items-center gap-2 font-semibold ${
+                    isCustom ? 'text-violet-700' : 'text-slate-700'
+                  }`}
+                >
+                  <bar.icon className={`h-4 w-4 ${isCustom ? 'text-violet-600' : 'text-slate-500'}`} />
                   {bar.label}
                 </span>
-                <span className="text-slate-200/80">{formatMB(bar.value)}</span>
+                <span className={`${isCustom ? 'font-bold text-violet-700' : 'text-slate-500'}`}>
+                  {formatBytes(bar.value)}
+                </span>
               </div>
-              <div className="h-3 w-full rounded-full bg-white/10">
-                <div
-                  className={`h-full rounded-full bg-gradient-to-r ${bar.color}`}
-                  style={{ width: `${percent}%` }}
-                />
+              <div className={`h-3 w-full rounded-full ${isCustom ? 'bg-violet-100' : 'bg-slate-200/70'}`}>
+                <div className={`h-full rounded-full ${bar.color}`} style={{ width: `${percent}%` }} />
               </div>
             </div>
           );
@@ -254,6 +269,62 @@ const imageToImageData = (img: HTMLImageElement): ImageData | null => {
   return ctx.getImageData(0, 0, img.width, img.height);
 };
 
+const clampToByte = (value: number) => Math.min(255, Math.max(0, Math.round(value)));
+
+const buildYCrCbPlanes = (imageData: ImageData) => {
+  const { width, height, data } = imageData;
+  const yPlane = new Uint8ClampedArray(data.length);
+  const cbPlane = new Uint8ClampedArray(data.length);
+  const crPlane = new Uint8ClampedArray(data.length);
+  const recombined = new Uint8ClampedArray(data.length);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+    const Cb = -0.1687 * r - 0.3313 * g + 0.5 * b + 128;
+    const Cr = 0.5 * r - 0.4187 * g - 0.0813 * b + 128;
+
+    const yVal = clampToByte(Y);
+    const cbVal = clampToByte(Cb);
+    const crVal = clampToByte(Cr);
+
+    const cbCentered = cbVal - 128;
+    const crCentered = crVal - 128;
+
+    const reconR = clampToByte(yVal + 1.402 * crCentered);
+    const reconG = clampToByte(yVal - 0.34414 * cbCentered - 0.71414 * crCentered);
+    const reconB = clampToByte(yVal + 1.772 * cbCentered);
+
+    yPlane[i] = yPlane[i + 1] = yPlane[i + 2] = yVal;
+    yPlane[i + 3] = 255;
+
+    cbPlane[i] = 32;
+    cbPlane[i + 1] = 64;
+    cbPlane[i + 2] = cbVal;
+    cbPlane[i + 3] = 255;
+
+    crPlane[i] = crVal;
+    crPlane[i + 1] = 48;
+    crPlane[i + 2] = 48;
+    crPlane[i + 3] = 255;
+
+    recombined[i] = reconR;
+    recombined[i + 1] = reconG;
+    recombined[i + 2] = reconB;
+    recombined[i + 3] = 255;
+  }
+
+  return {
+    y: new ImageData(yPlane, width, height),
+    cb: new ImageData(cbPlane, width, height),
+    cr: new ImageData(crPlane, width, height),
+    recombined: new ImageData(recombined, width, height),
+  };
+};
+
 
 export default function Home() {
   const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
@@ -266,6 +337,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null);
   const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
+  const [ycrcbPreview, setYcrcbPreview] = useState<YCrCbPreview | null>(null);
   const [metrics, setMetrics] = useState<{ psnr: number | null; ssim: number | null }>({ psnr: null, ssim: null });
   const [codecMetrics, setCodecMetrics] = useState<{
     jpeg: { encodeMs: number | null; decodeMs: number | null };
@@ -317,6 +389,25 @@ export default function Home() {
     return out;
   };
 
+  const updateYCrCbPreview = (imageData: ImageData | null) => {
+    if (!imageData) {
+      setYcrcbPreview(null);
+      return;
+    }
+
+    const planes = buildYCrCbPlanes(imageData);
+    const yUrl = imageDataToDataUrl(planes.y);
+    const cbUrl = imageDataToDataUrl(planes.cb);
+    const crUrl = imageDataToDataUrl(planes.cr);
+    const compositeUrl = imageDataToDataUrl(planes.recombined);
+
+    if (yUrl && cbUrl && crUrl && compositeUrl) {
+      setYcrcbPreview({ y: yUrl, cb: cbUrl, cr: crUrl, composite: compositeUrl });
+    } else {
+      setYcrcbPreview(null);
+    }
+  };
+
   const handleImageSelect = (file: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -329,6 +420,7 @@ export default function Home() {
         setOriginalImage(img);
         setProcessedImageData(null);
         setHeatmapUrl(null);
+        setYcrcbPreview(null);
         setMetrics({ psnr: null, ssim: null });
         setCodecMetrics({
           jpeg: { encodeMs: null, decodeMs: null },
@@ -383,6 +475,7 @@ export default function Home() {
               setMetrics({ psnr: json.metrics.psnr ?? null, ssim: json.metrics.ssim ?? null });
               setHeatmapUrl(null);
             }
+            updateYCrCbPreview(originalData ?? processedData);
             setCodecMetrics({
               png: json.timings.png,
               jpeg: json.timings.jpeg,
@@ -433,6 +526,7 @@ export default function Home() {
       setProcessedImageData(decoded.imageData);
       setHeatmapUrl(null);
       setMetrics({ psnr: null, ssim: null });
+      updateYCrCbPreview(decoded.imageData);
       setCodecMetrics({
         custom: { encodeMs: null, decodeMs: null },
         jpeg: { encodeMs: null, decodeMs: null },
@@ -490,6 +584,7 @@ export default function Home() {
 
       ctx.drawImage(originalImage, 0, 0);
       const imageData = ctx.getImageData(0, 0, originalImage.width, originalImage.height);
+      updateYCrCbPreview(imageData);
       const jpegStart = performance.now();
       const jpegUrl = canvasRef.current!.toDataURL('image/jpeg', 0.9);
       const jpegEncodeMs = performance.now() - jpegStart;
@@ -669,34 +764,41 @@ export default function Home() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-50">
-      <div className="pointer-events-none absolute inset-0 opacity-60">
-        <div className="absolute left-10 top-10 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="absolute right-[-60px] top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-400/10 blur-[120px]" />
+    <main className="light-theme relative min-h-screen overflow-hidden bg-white text-slate-900">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-48 -top-48 h-[52rem] w-[52rem] rounded-full bg-gradient-to-br from-sky-500 via-blue-600/80 to-transparent blur-[180px] opacity-100" />
+        <div className="absolute -right-48 -bottom-48 h-[56rem] w-[56rem] rounded-full bg-gradient-to-tl from-purple-800 via-violet-600/80 to-transparent blur-[200px] opacity-100" />
+        <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-blue-100/60 via-transparent to-transparent" />
+        <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-purple-100/60 via-transparent to-transparent" />
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12">
-        <header className="space-y-8">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
-            <Sparkles className="h-4 w-4" />
-            Experimental codec — lossless preview
+        <header className="space-y-6 text-center">
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/50 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-violet-700 shadow-sm backdrop-blur-sm">
+              <Sparkles className="h-4 w-4" />
+              Experimental Codec
+            </div>
           </div>
           <div className="space-y-4">
-            <h1 className="text-4xl font-black leading-tight text-white sm:text-5xl">
-              Flexible compression with instant visualization
+            <h1 className="text-5xl font-black leading-tight text-slate-900 sm:text-6xl">
+              Modern Image Compression,
+              <br />
+              <span className="bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">
+                Instant Visualization
+              </span>
             </h1>
-            <p className="max-w-3xl text-lg text-slate-200/80">
-              Upload any image and see the pipeline convert RGB to YCrCb, encode with QOI, and pack residual data with
-              Huffman coding. Keep discard bits at 0 for lossless preview.
+            <p className="mx-auto max-w-3xl text-lg text-slate-600">
+              Upload an image to see a custom image compression algorithm in action. Adjust settings to see how it
+              affects the result and file size in real-time.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap justify-center gap-4 pt-4">
               {featureChips.map((chip) => (
                 <span
                   key={chip.label}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-100"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/50 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm"
                 >
-                  <chip.icon className="h-4 w-4 text-emerald-200" />
+                  <chip.icon className="h-4 w-4 text-violet-600" />
                   {chip.label}
                 </span>
               ))}
@@ -705,31 +807,31 @@ export default function Home() {
         </header>
 
         <section className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_1fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+          <div className="rounded-3xl border border-slate-200/80 bg-white/60 p-6 shadow-lg backdrop-blur-md">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300/80">Controls</p>
-                <h2 className="text-xl font-bold text-white">Balance fidelity and size</h2>
+                <p className="text-xs font-semibold uppercase tracking-widest text-violet-600">Controls</p>
+                <h2 className="text-xl font-bold text-slate-800">Balance Fidelity and Size</h2>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+              <div className="inline-flex items-center gap-2 rounded-full bg-violet-100/80 px-3 py-1 text-xs font-semibold text-violet-700">
                 <Sparkles className="h-4 w-4" />
                 Auto-updating simulation
               </div>
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-inner">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-100/50 p-4 shadow-inner">
                 <div className="mb-4 flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-200">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
                       <Layers className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">Block size</p>
-                      <p className="text-xs text-slate-300/80">Choose node size for Huffman (min 2x2).</p>
+                      <p className="font-semibold text-slate-800">Block size</p>
+                      <p className="text-xs text-slate-500">Node size for Huffman.</p>
                     </div>
                   </div>
-                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-emerald-100">
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-violet-700">
                     {blockSize}px
                   </span>
                 </div>
@@ -740,22 +842,22 @@ export default function Home() {
                   step="2"
                   value={blockSize}
                   onChange={(e) => setBlockSize(Number(e.target.value))}
-                  className="w-full accent-emerald-400"
+                  className="w-full accent-violet-500"
                 />
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-inner space-y-4">
+              <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-100/50 p-4 shadow-inner">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-200">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
                       <SlidersHorizontal className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">Discard lower bits</p>
-                      <p className="text-xs text-slate-300/80">Set to 0 for lossless; raise to trade detail for size.</p>
+                      <p className="font-semibold text-slate-800">Discard lower bits</p>
+                      <p className="text-xs text-slate-500">0 for lossless.</p>
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-cyan-100">
+                  <span className="flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-blue-700">
                     <span>{discardBits}</span>
                     <span>bits</span>
                   </span>
@@ -767,22 +869,23 @@ export default function Home() {
                   step="1"
                   value={discardBits}
                   onChange={(e) => setDiscardBits(Number(e.target.value))}
-                  className="w-full accent-cyan-400"
+                  className="w-full accent-blue-500"
                 />
-                <div className="flex items-center justify-between">
-  <p className="text-sm font-medium text-slate-200">Smoothing between nodes</p>
-
-  <button
-    onClick={() => setSmooth(v => !v)}
-    className={`relative h-6 w-11 rounded-full transition 
-    ${smooth ? 'bg-emerald-500/80' : 'bg-slate-500/60'}`}
-  >
-    <span
-      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition
-      ${smooth ? 'translate-x-5' : 'translate-x-0'}`}
-    />
-  </button>
-</div>
+                <div className="flex items-center justify-between pt-2">
+                  <p className="font-medium text-slate-700">Smoothing</p>
+                  <button
+                    onClick={() => setSmooth((v) => !v)}
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      smooth ? 'bg-violet-500' : 'bg-slate-400'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+                        smooth ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -808,40 +911,45 @@ export default function Home() {
               mine={stats.compressedSize}
             />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                    <Gauge className="h-4 w-4 text-emerald-200" />
-                    Quality metrics
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-lg backdrop-blur-md">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Gauge className="h-5 w-5 text-violet-600" />
+                    <h3 className="text-lg font-bold text-slate-800">Quality Metrics</h3>
                   </div>
-                  <span className="text-xs text-slate-300/80">{sourceKind === 'container' ? 'Needs original for PSNR/SSIM' : 'vs original'}</span>
+                  <span className="text-xs text-slate-500">
+                    {sourceKind === 'container' ? 'Original needed' : 'vs. Original'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">PSNR</p>
-                    <p className="mt-2 text-xl font-bold text-white">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="rounded-2xl border border-slate-200/80 bg-slate-100/60 p-4 text-center shadow-inner">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">PSNR</p>
+                    <p className="mt-2 text-2xl font-bold text-violet-600">
                       {metrics.psnr === null
                         ? 'N/A'
                         : metrics.psnr === Infinity
-                          ? '∞ dB'
-                          : `${metrics.psnr.toFixed(2)} dB`}
+                          ? '∞'
+                          : `${metrics.psnr.toFixed(2)}`}
+                      <span className="text-base font-medium text-violet-500"> dB</span>
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">SSIM</p>
-                    <p className="mt-2 text-xl font-bold text-white">
+                  <div className="rounded-2xl border border-slate-200/80 bg-slate-100/60 p-4 text-center shadow-inner">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">SSIM</p>
+                    <p className="mt-2 text-2xl font-bold text-violet-600">
                       {metrics.ssim === null ? 'N/A' : metrics.ssim.toFixed(4)}
                     </p>
                   </div>
                 </div>
                 {heatmapUrl && (
-                  <div className="mt-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Difference heatmap</p>
+                  <div className="mt-4">
+                    <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-500">
+                      Difference Heatmap
+                    </p>
                     <button
                       type="button"
                       onClick={() => openLightbox(heatmapUrl, 'Difference heatmap')}
-                      className="mt-2 block overflow-hidden rounded-2xl border border-white/10 shadow-lg transition hover:scale-[1.01]"
+                      className="mt-2 block overflow-hidden rounded-2xl border-2 border-slate-200/80 shadow-lg transition hover:border-violet-400/80 hover:shadow-xl"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={heatmapUrl} alt="Heatmap" className="w-full" />
@@ -850,83 +958,112 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                    <Layers className="h-4 w-4 text-cyan-200" />
-                    Container inspector
+              <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-lg backdrop-blur-md">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Layers className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-bold text-slate-800">Container Inspector</h3>
                   </div>
-                  <span className="text-xs text-slate-300/80">Header + sizes</span>
+                  <span className="text-xs text-slate-500">File structure</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm text-slate-100">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Dimensions</p>
-                    <p className="mt-1 text-lg font-semibold">
-                      {dimensions ? `${dimensions.width}×${dimensions.height}` : '—'}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Block / Discard</p>
-                    <p className="mt-1 text-lg font-semibold">
-                      {blockSize}px / {discardBits} bits {smooth ? '• smooth' : '• flat'}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">QOI bytes</p>
-                    <p className="mt-1 text-lg font-semibold">{(stats.qoiSize / 1024).toFixed(1)} KB</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Huffman bytes</p>
-                    <p className="mt-1 text-lg font-semibold">{(stats.nodalSize / 1024).toFixed(1)} KB</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Total container</p>
-                    <p className="mt-1 text-lg font-semibold">{(stats.compressedSize / 1024).toFixed(1)} KB</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">Source</p>
-                    <p className="mt-1 text-lg font-semibold capitalize">{sourceKind ?? '—'}</p>
-                  </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {[
+                    { label: 'Dimensions', value: dimensions ? `${dimensions.width}×${dimensions.height}` : '—' },
+                    { label: 'Block / Discard', value: `${blockSize}px / ${discardBits}b` },
+                    { label: 'QOI Bytes', value: `${(stats.qoiSize / 1024).toFixed(1)} KB` },
+                    { label: 'Huffman Bytes', value: `${(stats.nodalSize / 1024).toFixed(1)} KB` },
+                    { label: 'Total Size', value: `${(stats.compressedSize / 1024).toFixed(1)} KB` },
+                    { label: 'Smoothing', value: smooth ? 'On' : 'Off' },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-2xl border border-slate-200/80 bg-slate-100/60 p-3 shadow-inner"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{item.label}</p>
+                      <p className="mt-1 text-lg font-bold text-blue-600">{item.value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                  <Zap className="h-4 w-4 text-amber-200" />
-                  Codec timings
+            {ycrcbPreview && (
+              <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-lg backdrop-blur-md">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Waves className="h-5 w-5 text-sky-600" />
+                    <h3 className="text-lg font-bold text-slate-800">YCrCb Color Space</h3>
+                  </div>
+                  <span className="text-xs text-slate-500">Luma & Chroma planes</span>
                 </div>
-                <span className="text-xs text-slate-300/80">Encode / decode</span>
+                <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+                  {[
+                    { label: 'Luma (Y)', src: ycrcbPreview.y },
+                    { label: 'Blue Chroma (Cb)', src: ycrcbPreview.cb },
+                    { label: 'Red Chroma (Cr)', src: ycrcbPreview.cr },
+                    { label: 'Recombined', src: ycrcbPreview.composite },
+                  ].map((row) => (
+                    <div key={row.label}>
+                      <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-500">
+                        {row.label}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openLightbox(row.src, row.label)}
+                        className="mt-2 block overflow-hidden rounded-2xl border-2 border-slate-200/80 shadow-lg transition hover:border-sky-400/80 hover:shadow-xl"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={row.src} alt={row.label} className="w-full" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-slate-100 sm:grid-cols-4">
+            )}
+
+            <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-6 shadow-lg backdrop-blur-md">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Zap className="h-5 w-5 text-amber-500" />
+                  <h3 className="text-lg font-bold text-slate-800">Codec Timings</h3>
+                </div>
+                <span className="text-xs text-slate-500">Encode / Decode Performance</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                 {[
                   { label: 'PNG', data: codecMetrics.png, size: stats.pngSize },
                   { label: 'JPEG', data: codecMetrics.jpeg, size: stats.jpegSize },
                   { label: 'WebP', data: codecMetrics.webp, size: stats.webpSize },
                   { label: 'Custom', data: codecMetrics.custom, size: stats.compressedSize },
                 ].map((row) => (
-                  <div key={row.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-300/80">{row.label}</p>
-                    <p className="mt-1 text-xs text-slate-300">Size: {(row.size / 1024).toFixed(1)} KB</p>
-                    <p className="mt-1 text-sm font-semibold text-white">Enc: {formatMs(row.data.encodeMs)}</p>
-                    <p className="text-sm font-semibold text-white">Dec: {formatMs(row.data.decodeMs)}</p>
+                  <div
+                    key={row.label}
+                    className="rounded-2xl border border-slate-200/80 bg-slate-100/60 p-4 text-center shadow-inner"
+                  >
+                    <p className="text-sm font-bold uppercase tracking-widest text-slate-600">{row.label}</p>
+                    <p className="mt-1 text-xs text-slate-500">{(row.size / 1024).toFixed(1)} KB</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-700">
+                      <span className="font-medium text-slate-500">Enc:</span> {formatMs(row.data.encodeMs)}
+                    </p>
+                    <p className="text-sm font-semibold text-slate-700">
+                      <span className="font-medium text-slate-500">Dec:</span> {formatMs(row.data.decodeMs)}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-4 text-sm font-medium text-slate-100">
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                <span className="h-3 w-3 rounded-full bg-emerald-400" />
+            <div className="flex flex-wrap justify-center gap-4 pt-4 text-sm font-medium">
+              <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/50 px-4 py-2 text-slate-600 shadow-sm backdrop-blur-sm">
+                <span className="h-3 w-3 rounded-full bg-green-400" />
                 QOI: {(stats.qoiSize / 1024).toFixed(1)} KB
               </div>
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+              <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/50 px-4 py-2 text-slate-600 shadow-sm backdrop-blur-sm">
                 <span className="h-3 w-3 rounded-full bg-indigo-400" />
                 Huffman: {(stats.nodalSize / 1024).toFixed(1)} KB
               </div>
               {isProcessing && (
-                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-emerald-100">
+                <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-violet-100/80 px-4 py-2 text-violet-700 shadow-sm backdrop-blur-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Updating preview
                 </div>
@@ -934,30 +1071,30 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-slate-100">
-                  <Camera className="h-4 w-4 text-slate-300" />
+              <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-4 shadow-lg backdrop-blur-md">
+                <div className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-slate-700">
+                  <Camera className="h-4 w-4 text-slate-500" />
                   {originalLabel}
                 </div>
                 <button
                   type="button"
                   onClick={() => openLightbox(displayImageUrl, originalLabel)}
-                  className="block w-full overflow-hidden rounded-2xl border border-white/10 shadow-lg transition hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                  className="block w-full overflow-hidden rounded-2xl border-2 border-slate-200/80 shadow-lg transition hover:border-slate-400/80 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-violet-400/60"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={displayImageUrl ?? undefined} className="w-full" alt={originalLabel} />
                 </button>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-slate-100">
-                  <Sparkles className="h-4 w-4 text-emerald-200" />
+              <div className="rounded-3xl border border-slate-200/80 bg-white/70 p-4 shadow-lg backdrop-blur-md">
+                <div className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-violet-700">
+                  <Sparkles className="h-4 w-4 text-violet-500" />
                   {previewLabel}
                 </div>
                 {previewSrc && (
                   <button
                     type="button"
                     onClick={() => openLightbox(previewSrc, previewLabel)}
-                    className="block w-full overflow-hidden rounded-2xl border border-white/10 shadow-lg transition hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                    className="block w-full overflow-hidden rounded-2xl border-2 border-violet-300/80 shadow-lg transition hover:border-violet-400/80 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-violet-400/60"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={previewSrc} className="w-full" alt="Processed" />
@@ -966,63 +1103,31 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="pt-4 flex flex-col items-center gap-3 text-center">
+            <div className="pt-8 flex flex-col items-center gap-4 text-center">
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   onClick={handleDownloadCompressed}
                   disabled={!containerBytes || isProcessing}
-                  className={`inline-flex items-center gap-2 rounded-full bg-emerald-100 text-slate-900 px-6 py-3 text-sm font-semibold transition ${
-                    !containerBytes || isProcessing
-                      ? 'cursor-not-allowed opacity-60'
-                      : 'hover:translate-y-[-1px] hover:bg-emerald-50'
-                  }`}
+                  className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="h-4 w-4" />
-                  Download custom .kmr
+                  Download .kmr
                 </button>
                 <button
                   onClick={() => handleDownloadPreview('png')}
                   disabled={!processedImageUrl && !processedImageData}
-                  className={`inline-flex items-center gap-2 rounded-full bg-white/80 text-slate-900 px-6 py-3 text-sm font-semibold transition ${
-                    !processedImageUrl && !processedImageData
-                      ? 'cursor-not-allowed opacity-60'
-                      : 'hover:translate-y-[-1px] hover:bg-white'
-                  }`}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/80 px-6 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="h-4 w-4" />
-                  Download preview PNG
-                </button>
-                <button
-                  onClick={() => handleDownloadPreview('jpeg')}
-                  disabled={!processedImageUrl && !processedImageData}
-                  className={`inline-flex items-center gap-2 rounded-full bg-white/80 text-slate-900 px-6 py-3 text-sm font-semibold transition ${
-                    !processedImageUrl && !processedImageData
-                      ? 'cursor-not-allowed opacity-60'
-                      : 'hover:translate-y-[-1px] hover:bg-white'
-                  }`}
-                >
-                  <Download className="h-4 w-4" />
-                  Download preview JPEG
-                </button>
-                <button
-                  onClick={handleDownloadHeatmap}
-                  disabled={!heatmapUrl}
-                  className={`inline-flex items-center gap-2 rounded-full bg-white/60 text-slate-900 px-6 py-3 text-sm font-semibold transition ${
-                    !heatmapUrl ? 'cursor-not-allowed opacity-60' : 'hover:translate-y-[-1px] hover:bg-white'
-                  }`}
-                >
-                  <Download className="h-4 w-4" />
-                  Download heatmap
+                  Download PNG
                 </button>
                 <button
                   onClick={handleDownloadJsonSummary}
                   disabled={!dimensions}
-                  className={`inline-flex items-center gap-2 rounded-full bg-white/60 text-slate-900 px-6 py-3 text-sm font-semibold transition ${
-                    !dimensions ? 'cursor-not-allowed opacity-60' : 'hover:translate-y-[-1px] hover:bg-white'
-                  }`}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/60 px-6 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="h-4 w-4" />
-                  Download JSON summary
+                  Download JSON
                 </button>
                 <button
                   onClick={() => {
@@ -1034,6 +1139,7 @@ export default function Home() {
                     setContainerBytes(null);
                     setProcessedImageData(null);
                     setHeatmapUrl(null);
+                    setYcrcbPreview(null);
                     setMetrics({ psnr: null, ssim: null });
                     setCodecMetrics({
                       jpeg: { encodeMs: null, decodeMs: null },
@@ -1053,14 +1159,14 @@ export default function Home() {
                       webpSize: 0,
                     });
                   }}
-                  className="inline-flex items-center gap-2 rounded-full bg-white text-slate-900 px-6 py-3 text-sm font-semibold transition hover:translate-y-[-1px] hover:bg-slate-100"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-100"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Reset and try another image
+                  Reset
                 </button>
               </div>
-              <p className="text-xs text-slate-300/80">
-                Saves the residual QOI + Huffman nodal streams into a single custom container ({CONTAINER_EXTENSION}).
+              <p className="text-xs text-slate-500">
+                Download the custom container, preview images, or a JSON summary of the results.
               </p>
             </div>
           </div>
@@ -1068,25 +1174,25 @@ export default function Home() {
         <canvas ref={canvasRef} className="hidden" />
         {lightbox && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-md"
             onClick={closeLightbox}
             role="presentation"
           >
             <div
-              className="relative max-h-[90vh] max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 p-3 shadow-2xl"
+              className="relative max-h-[90vh] max-w-5xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label={lightbox.label}
             >
               <button
                 onClick={closeLightbox}
-                className="absolute right-3 top-3 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/20"
+                className="absolute right-3 top-3 rounded-full bg-slate-200/80 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
               >
                 Close
               </button>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={lightbox.src} alt={lightbox.label} className="max-h-[80vh] w-auto rounded-lg object-contain" />
-              <p className="mt-2 text-center text-sm text-slate-200">{lightbox.label}</p>
+              <p className="mt-2 text-center text-sm text-slate-600">{lightbox.label}</p>
             </div>
           </div>
         )}
